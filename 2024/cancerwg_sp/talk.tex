@@ -1,0 +1,220 @@
+\documentclass{article}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage[margin=1in]{geometry}
+\setlength{\parindent}{0pt}
+\newcommand{\R}{\mathbb{R}}
+
+\newtheorem{theorem}{Theorem}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=blue,      
+    urlcolor=blue,
+    citecolor = blue
+}
+
+\usepackage[round]{natbib}
+\bibliographystyle{abbrvnat}
+
+\newcommand{\lecture}[4]{
+   \pagestyle{myheadings}
+   \thispagestyle{plain}
+   \newpage
+   \setcounter{page}{1}
+   \noindent
+   \begin{center}
+   \framebox{
+      \vbox{\vspace{2mm}
+    \hbox to 6.28in { {Phillip Nicol
+                        \hfill #2} }
+       \vspace{4mm}
+       \hbox to 6.28in { {\Large \hfill #1 \hfill} }
+       \vspace{2mm}
+       \hbox to 6.28in { {\it Date: #3 \hfill #4} }
+      \vspace{2mm}}
+   }
+   \end{center}
+   \markboth{#1}{#1}
+   \vspace*{4mm}
+}
+
+
+\begin{document}
+
+\lecture{Estimation in log-bilinear models}{HSPH Cancer WG}{March 6, 2024}{Boston, MA}
+
+
+
+\section{Model setup}
+
+\begin{itemize}
+\item Single-cell count matrix $Y \in \R^{I \times J}$ ($I$ genes, $J$ cells). 
+\item Outcome distribution $Y_{ij} \sim \text{Pois}(\mu_{ij})$
+\item Log link $\log(\mu_{ij}) = \alpha_i + \beta_j + \sum_{m=1}^M \sigma_m u_{im} v_{jm}$
+\end{itemize}
+
+In matrix form, 
+\begin{equation}
+\log(\mu) = \alpha 1_J^{\top} + 1_I \beta^{\top} + U \Sigma V^{\top}
+\end{equation}
+where $U^{\top} U = V^{\top} V = I_M$ and $\Sigma = \text{diag}(\sigma_1, \ldots, \sigma_M)$. 
+
+\bigskip 
+
+$V \in \R^{J \times M}$ provides a low-dimensional embedding of cells. 
+
+\section{Existence of MLE}
+
+Define $X = U \Sigma V^{\top}$ so the log-likelihood can be written
+
+\begin{equation}
+\ell(\alpha, \beta, X) = \text{const} + \sum_{ij} Y_{ij} (\alpha_i + \beta_j + X_{ij}) - \exp(\alpha_i + \beta_j + X_{ij})
+\end{equation}
+
+The MLE is a solution to the constrained optimization problem
+\begin{equation}
+\text{argmax}_{X : \text{rk}(X) = M} \ell(\alpha, \beta, X) \label{eq:mle}
+\end{equation}
+
+However, it is unclear if a solution to \eqref{eq:mle} exists. For motivation consider a non-existence result for GLMs:
+
+\begin{theorem}[\cite{correia2019verifying}]
+For a Poisson GLM with log link and full rank model matrix $X \in \R^{n \times p}$. The MLE does not exist if and only if there is a non-zero $\gamma \in \R^p$ such that $y_i > 0 \Rightarrow (X\gamma)_i = 0$ and $y_i = 0 \Rightarrow (X \gamma)_i \leq 0$. 
+\end{theorem}
+
+The bilinear model is essentially a Poisson GLM where both the covariates and coefficients are simultaneously estimated. 
+
+\medskip 
+
+\textbf{Contrived example.} $Y_{ij} = 1$ for all $i,j$ except $Y_{11} = 0$. Note that $-IJ + 1$ is an upper bound to likelihood. Now take $\alpha_i = \beta_j = 0$, $M=1$, $u = e_1 \in \R^I$, $v = -e_1 \in \R^J$. Then 
+\begin{equation}
+\lim_{\sigma_1 \to \infty} \ell(\alpha, \beta, \sigma_1 uv^{\top}) = -IJ + 1
+\end{equation}
+So the MLE is undefined. 
+
+\medskip 
+
+A slight generalization of this is that the MLE will not exist when $Y$ is binary and 
+
+\begin{equation}
+M \geq \text{rank}(1 - Y)
+\end{equation}
+
+\medskip 
+
+We would like to know if there are more general conditions where MLE does not exist. 
+
+\medskip 
+
+\textbf{Failed proof.} Starting from arbitrary $\alpha,\beta, X = U\Sigma V^{\top}$, we would like to show that perturbing $X$ in a particular direction always increases likelihood. In particular, let $\tilde{X} \in \R^{I \times J}$ such that $Y_{ij} > 0 \Rightarrow \tilde{X}_{ij} = 0$ and $Y_{ij} = 0 \Rightarrow \tilde{X}_{ij} \leq 0$. Now it is straightforward to see that 
+\begin{equation}
+\ell(\alpha, \beta, X + \lambda \tilde{X}) - \ell(\alpha, \beta, X) > 0
+\end{equation}
+for any $\lambda > 0$.
+
+Unfortunately, $X + \lambda \tilde{X}$ will in general not satisfy the rank $M$ constraint. One sufficient condition for rank at most $M$ is $\text{row}(\tilde{X}) \subset \text{row}(X)$ or $\text{col}(\tilde{X}) \subset \text{col}(X)$. However, it is not clear (and seems unlikely) that for arbitrary $X$ we can find such a $\tilde{X}$. 
+
+\section{Stabilizing singular values}
+
+We consider a Bayesian approach by placing independent exponential priors on $\sigma_m$: 
+\begin{equation}
+p(\sigma_m) = \lambda \exp(-\lambda \sigma_m)
+\end{equation}
+
+Now the MAP estimate is 
+\begin{equation}
+\text{argmin}_{X: \text{rk}(X) = M} -\ell(\alpha, \beta, X) + \lambda \sum_{m=1}^M \sigma_m(X)
+\end{equation}
+
+\section{Estimation with proximal gradient descent} 
+
+General optimization problem\footnote{This section is based on \href{https://www.stat.cmu.edu/~ryantibs/convexopt-F15/lectures/08-prox-grad.pdf}{these} lecture notes.}
+\begin{equation}
+\text{argmin}_{x} f(x) + h(x)
+\end{equation}
+where $f$ is convex and smooth and $h$ is convex but not necessarily differentiable. Many problems can be written in this form.
+
+\medskip 
+
+\textbf{Example 1.} $f(\beta) = || y - X\beta||_2^2$ and $h(\beta) = \lambda ||\beta||_1$ is the LASSO.
+
+\medskip 
+
+\textbf{Example 2.} For Poisson log-bilinear model $f(X) = -\ell(\alpha, \beta, X)$, $h(X) = 0$ if $\text{rank}(X) \leq M$ and $h(X) = \infty$ if $\text{rk}(X) > M$
+
+\medskip 
+
+\textbf{Idea:} Replace $f$ with quadratic approximation 
+
+\begin{equation}
+f(x) = f(\hat{x}) + \nabla f(\hat{x})^{\top} (x - \hat{x}) + \frac{1}{2\gamma} || x - \hat{x}||_2^2
+\end{equation}
+
+Note that this avoids calculating the Hessian of $f$ as this could be prohibitively large. A quick calculation shows the solution is 
+
+\begin{equation}
+\text{prox} \left( \hat{x} - \gamma \nabla f(\hat{x}) \right)
+\end{equation}
+
+where 
+
+\begin{equation}
+\text{prox}_{\gamma}(x) := \text{argmin}_{z} \frac{1}{2 \gamma} ||x - z||_2^2 + h(z)
+\end{equation}
+
+\medskip 
+
+\textbf{Example 1.} For LASSO, 
+\begin{equation}
+\text{prox}(\beta) = S_{\lambda \gamma}(\beta)
+\end{equation}
+where $S_{\lambda t}$ is the soft-threshold operator:
+\begin{equation}
+S_{\lambda \gamma}(\beta_j) = \begin{cases}
+\beta_j - \lambda \gamma &\text{if } \beta_j > \lambda \gamma \\
+0 &\text{if } |\beta_j| < \lambda \gamma \\
+\beta_j + \lambda \gamma &\text{if } \beta_j < -\lambda \gamma
+\end{cases}
+\end{equation}
+
+Moreover, $\nabla f(\beta) = X^{\top} (y - X \beta)$ so a simple algorithm to fit LASSO is to iteratively soft-threshold the estimated $\beta$:
+\begin{equation}
+\hat{\beta}^{(t+1)} = S_{\lambda \gamma} \left( \hat{\beta}^{(t)} - \gamma X^{\top}(y-X\hat{\beta}^{(t)}) \right)
+\end{equation}
+
+\medskip 
+
+\textbf{Example 2.} For the bilinear model, 
+
+\begin{equation}
+\text{prox}(X) = \text{argmin}_{Z:\text{rk}(Z) = M} ||X - Z||_F^2 = \text{SVD}_M(X) := U_X \Sigma_X V^{\top}_X
+\end{equation}
+
+and 
+
+\begin{equation}
+\nabla \ell(\alpha, \beta, X) = Y - \mu 
+\end{equation}
+
+which inspires the following iteratively reweighted SVD algorithm 
+
+\begin{equation}
+\hat{X}^{(t + 1)} = \text{SVD}_M \left( \hat{X}^{(t)} + \gamma (Y - \hat{\mu}) \right)
+\end{equation}
+
+\bigskip 
+
+It can be shown that when the exponential prior is added to the singular values, the proximal step becomes 
+
+\begin{equation}
+\text{Prox}(X) = U_X \text{diag}((\sigma_{1X} - \lambda)_+, \ldots, (\sigma_{mX} - \lambda)_+) V^{\top}_X
+\end{equation}
+
+So the estimation algorithm is the same except for the additional step of soft-thresholding the singular values.
+
+\bibliography{sources}
+
+\end{document}
