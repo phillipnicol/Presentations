@@ -11,3 +11,6 @@
 *.blg
 *.aux
 *.bbl
+*.nav
+*.snm
+*.toc
