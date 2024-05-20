@@ -1,8 +1,11 @@
 \documentclass[aspectratio=43]{beamer}
-\usepackage{amsmath, amsthm, amssymb}
-\usepackage{xcolor}
 
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{empheq}
+\usepackage{xcolor}
 \newcommand{\R}{\mathbb{R}}
+\usepackage{natbib}
+\bibliographystyle{plain}
 
 
 \title{Dimension reduction for single-cell and spatial RNA-seq using generalized bilinear models}
@@ -16,11 +19,24 @@
 
 \begin{frame}{Introduction}
 
-Count Fig 
+\begin{itemize}
+\item Single-cell RNA-seq is a revolutionary technology that allows gene expression to be quantified at the level of individual cells. 
+
+\item Data comes in the form of $I \times J$ count matrix $Y$. 
+
+\item For large datasets $I \approx 10^4$ and $J \approx 10^7$. 
+
+\item Dimension reduction is a critical first step before downstream analysis (clustering, visualization, etc.) 
+
+\centering
+\includegraphics[scale=0.6]{Fig/counts.png}
+
+\end{itemize}
 \end{frame}
 
 \begin{frame}{PCA cannot be directly applied due to heterogeneous variances}
-
+\centering 
+\includegraphics[scale=0.4]{Fig/mean_variance_relationship.png}
 \end{frame}
 
 \begin{frame}{Standard approach is to transform the counts prior to PCA}
@@ -28,39 +44,50 @@ Count Fig
 The counts are commonly pre-processed by computing the \textit{Pearson residual}:
 
 \begin{equation}
-Z_{ij} := \frac{Y_{ij} - \hat{\mu}_{i}}{\sqrt{ \hat{\mu}_{i} - \hat{\mu}_{i}^2 / \hat{\alpha}_i}}
+Z_{ij} := \frac{Y_{ij} - \hat{\mu}_{i}}{\sqrt{ \hat{\mu}_{i} - \hat{\alpha}_i \hat{\mu}_{i}^2}}
 \end{equation}
 
 \begin{itemize}
-\item scTransform (SCT) (REF): Estimate $\hat{\mu}$ and $\hat{\alpha}$ with a NB GLM.
-\item APR (REF): Fix $\hat{\alpha} = 100$ (XX) and use a closed-form approximation to $\hat{\mu}$. 
+\item scTransform (SCT) \cite{hafemeister2019normalization}: Estimate $\hat{\mu}$ and $\hat{\alpha}$ with a NB GLM.
+\item APR \cite{lause2021analytic}: Fix $\hat{\alpha} = 0.01$ and use a closed-form approximation to $\hat{\mu}$. 
 \end{itemize}
 \end{frame}
 
 \begin{frame}{PCA on Pearson residuals can fail to capture rare cell types}
-If baseline mean is large then $Z_{ij} \approx Z_{ij'}$ even for very different counts.
+If $\hat{\mu}_i$ is large then $Z_{ij} \approx Z_{ij'}$ even for very different counts.
 
-FIG XXX 
+\vspace{2em}
+
+\centering
+\includegraphics[scale=0.17]{Fig/single_marker_pca.png}
 \end{frame}
 
-\begin{frame}{ERCC scaling}
+\begin{frame}{PCA on Pearson residuals is sensitive to changes in baseline expression}
+
+Starting with a dataset of technical replicates, scale each gene (row) by $\kappa_i \sim \text{Expo}(100)$:
+
+\centering 
+\includegraphics[scale=0.15]{Fig/ercc_scaled_pca.png}
 
 \end{frame}
 
-\begin{frame}{scGBM simultaneously models the counts and reduces dimensionality}
 
-\begin{equation}
-\begin{split}
+
+\begin{frame}{scGBM performs model-based dimension reduction}
+
+\begin{empheq}[box=\fbox]{align*}
 Y_{ij} &\sim \text{Pois}(\mu_{ij}) \\
 \log(\mu_{ij}) &= \alpha_i + \beta_j + \sum_{m=1}^M \sigma_m u_{im} v_{jm} \\
 \sigma_m &\sim \text{Expo}(a)
-\end{split}
-\end{equation}
+\end{empheq}
 
-$V := [v_{im}] \in \R^{J \times M}$ is the (low-dimensional) cell embeddings.
+\centering
+\includegraphics[scale=0.3]{Fig/gbm_model.png}
+\raggedright
 
+\vspace{-1em} 
 
-FIG XX 
+$V \in \R^{J \times M}$ are the low-dimensional cell-embeddings
 \end{frame}
 
 \begin{frame}{Estimation with iteratively reweighted singular value decomposition}
@@ -90,8 +117,9 @@ By analogy to PCA, we call this the \textit{projection method} (scGBM-proj)
 
 \end{frame}
 
-\begin{frame}{Single marker genes}
-
+\begin{frame}{Rare cell type simulation}
+\centering
+\includegraphics[scale=0.25]{Fig/single_marker_scGBM.png}
 \end{frame}
 
 \begin{frame}{ERCC Scaling}
@@ -122,5 +150,8 @@ By analogy to PCA, we call this the \textit{projection method} (scGBM-proj)
 \end{itemize}
 \end{frame}
 
+\begin{frame}{References}
+\bibliography{sources}
+\end{frame}
 
 \end{document}
