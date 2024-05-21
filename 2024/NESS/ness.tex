@@ -43,9 +43,9 @@
 
 The counts are commonly pre-processed by computing the \textit{Pearson residual}:
 
-\begin{equation}
+\begin{equation*}
 Z_{ij} := \frac{Y_{ij} - \hat{\mu}_{i}}{\sqrt{ \hat{\mu}_{i} - \hat{\alpha}_i \hat{\mu}_{i}^2}}
-\end{equation}
+\end{equation*}
 
 \begin{itemize}
 \item scTransform (SCT) \cite{hafemeister2019normalization}: Estimate $\hat{\mu}$ and $\hat{\alpha}$ with a NB GLM.
@@ -91,30 +91,47 @@ $V \in \R^{J \times M}$ are the low-dimensional cell-embeddings
 \end{frame}
 
 \begin{frame}{Estimation with iteratively reweighted singular value decomposition}
-Define $\hat{X}^{(t)}$ to be the current estimate of $\hat{U} \hat{\Sigma} \hat{V}^{\top}$. The following update is used for the latent factors:
+
+\begin{itemize}
+\item Can show that MLE is approximately equal to solving a weighted low rank problem.
+
+\item {Define $\hat{X}^{(t)}$ to be the current estimate of $\hat{U} \hat{\Sigma} \hat{V}^{\top}$. The following update is used for the latent factors:
 
 \begin{equation}
 \hat{X}^{(t+1)} = \text{SVD}_{M, 1/a} \left( \hat{X}^{(t)} + \gamma( Y - \hat{\mu})     \right) 
 \end{equation}
-$\text{SVD}_{M, 1/a}(\cdot)$ computes the rank $M$ truncated SVD and then soft-thresholds the remaining singular values by $1/a$. 
+$\text{SVD}_{M, 1/a}(\cdot)$ computes the rank $M$ truncated SVD and then soft-thresholds the remaining singular values by $1/a$. }
+\end{itemize}
+
 
 \end{frame}
 
 \begin{frame}{Faster estimation using scGBM-proj}
-When $J$ is very large, first estimate $\hat{\alpha}, \hat{U}$ using a smaller subset of cells.
 
-\vspace{3em}
-
-Then holding $\hat{\alpha}$ and $\hat{U}$ fixed, the parameters $\beta$ and $V \Sigma$ can be estimated by fitting $J$ GLMs in parallel. 
-
-\vspace{3em}
-
-By analogy to PCA, we call this the \textit{projection method} (scGBM-proj)
+\begin{itemize}
+\item When $J$ very large, first estimate $\hat{\alpha}$ and $\hat{U}$ using a smaller subset of cells. 
+\item Then, holding these fixed, the parameters $\beta$ and $V \Sigma$ can be estimated by fitting $J$ GLMs in parallel. 
+\item By analogy to PCA, we call this the \textit{projection method} (scGBM-proj)
+\item 10X Brain Data (1000 genes, 1.3 million cells) fit in {\color{red} 55 minutes} compared to {\color{red} 6+ hours} for GLM-PCA \cite{townes2019feature}.
+\end{itemize}
 
 \end{frame}
 
-\begin{frame}{scGBM is faster and more accurate than GLM-PCA}
+\begin{frame}{scGBM outperforms GLM-PCA on simulated data}
+\centering
+\includegraphics[scale=0.35]{Fig/glmpca-simaccuracy.png}
+\end{frame}
 
+
+\begin{frame}{Comparing scGBM and GLM-PCA on real data}
+\begin{itemize}
+\item By thinning $Y$, can obtain independent $Y^*$, $Y^{**}$ and use one for validation.
+
+\vspace{1em}
+
+\end{itemize}
+\centering
+\includegraphics[scale=0.17]{Fig/oos_covid.png}
 \end{frame}
 
 \begin{frame}{Rare cell type simulation}
@@ -122,31 +139,70 @@ By analogy to PCA, we call this the \textit{projection method} (scGBM-proj)
 \includegraphics[scale=0.25]{Fig/single_marker_scGBM.png}
 \end{frame}
 
-\begin{frame}{ERCC Scaling}
+\begin{frame}{Scaled data simulation}
+Scaling rows only changes the baseline gene intercept $\alpha_i$.
 
+\vspace{1em}
+
+\centering 
+\includegraphics[scale=0.15]{Fig/ercc_scaled_gbm.png}
 \end{frame}
 
 \begin{frame}{scGBM quantifies uncertainty in the low-dimensional embedding of cells}
+\begin{itemize}
+\item Quantify uncertainty in $V$ using classical method of inverting Fisher information matrix. 
+\begin{itemize}
+\item Full information matrix infeasible. Invert $M \times M$ submatrices holding other parameters fixed.
+\item In simulation coverage only slightly below nominal level. 
+\end{itemize}
 
+\item Uncertainty could be useful in downstream applications. For example, consider $Y_{ij} \sim \text{Pois}(1)$ random noise clustered by leading software: 
+\end{itemize}
+
+\centering
+\includegraphics[scale=0.14]{Fig/null_cluster_uncertainty.png}
 \end{frame}
 
-\begin{frame}{Cluster confidence index}
-
+\begin{frame}{Cluster cohesion index measures cluster stability}
+\centering
+\includegraphics[scale=0.16]{Fig/cci.png}
 \end{frame}
 
 \begin{frame}{Extending to spatial transcriptomics}
+\begin{itemize}
+\item In spatial transcriptomics we also observe the spatial coordinate of cells $x_i \in \R^{d}$ ($d=2$ or $3$). 
 
+\item {Can extend scGBM to identify factors that capture spatial features: 
+\begin{equation*}
+\text{argmin} -\ell(\alpha, \beta, U, \Sigma, V) + {\color{red} \mathcal{P}(V)}
+\end{equation*}
+where $\mathcal{P}(V)$ is a penalty that encourage nearby cells to have similar values for the embedding.}
+\end{itemize}
 \end{frame}
 
 \begin{frame}{Edge-aware spatial smoothing}
+\begin{itemize}
+\item { 
+Because boundaries between different spatial domain can be sharp, should not smooth uniformly in each direction:
+\begin{equation*}
+\mathcal{P}(V) = \sum_{j=1}^J \sum_{k \in N(j)} \omega_{jk} || V_{j \cdot} - V_{k \cdot} ||_2^2
+\end{equation*}
+where $\omega_{jk}$ can be set to $0$ if cells $j$ and $k$ are on opposite sides of boundary.
 
+}
+\end{itemize}
+
+
+\centering
+\includegraphics[scale=0.15]{Fig/edge_aware.png}
 \end{frame}
 
 \begin{frame}{Acknowledgements}
 \begin{itemize}
 \item Jeff Miller (Harvard Biostatistics)
 \item Rafa Irizarry (DFCI Data Science)
-\item NIH Cancer Training Grant (REF) 
+\item NIH Cancer Training Grant (T32CA009337) 
+\item Figures from article \cite{nicol2023model}.
 \end{itemize}
 \end{frame}
 
